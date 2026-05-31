@@ -404,39 +404,32 @@ async function fetchPlayerStats(id) {
 
 // ── MLB HEADLINES ──
 async function loadNews() {
-  try {
-    const rssUrl = encodeURIComponent("https://www.mlb.com/feeds/news/rss.xml");
-    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${rssUrl}&count=8`);
-    const data = await res.json();
-    if (data.status !== "ok" || !data.items?.length) throw new Error("No items");
-
-    document.getElementById("news-body").innerHTML =
-      `<div class="news-list">${data.items.map(item => {
-        const date = new Date(item.pubDate);
-        const ago = timeAgo(date);
-        return `<a class="news-item" href="${item.link}" target="_blank" rel="noopener">
-          <div class="news-headline">${item.title}</div>
-          <div class="news-meta">${ago}</div>
-        </a>`;
-      }).join("")}</div>`;
-  } catch(e) {
-    // fallback: try ESPN MLB RSS
+  const feeds = [
+    "https://www.mlb.com/feeds/news/rss.xml",
+    "https://www.espn.com/espn/rss/mlb/news"
+  ];
+  for (const feed of feeds) {
     try {
-      const rssUrl = encodeURIComponent("https://www.espn.com/espn/rss/mlb/news");
-      const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${rssUrl}&count=8`);
+      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feed)}`);
       const data = await res.json();
-      if (data.status !== "ok" || !data.items?.length) throw new Error();
+      const xml = new DOMParser().parseFromString(data.contents, "text/xml");
+      const items = [...xml.querySelectorAll("item")].slice(0, 8);
+      if (!items.length) continue;
       document.getElementById("news-body").innerHTML =
-        `<div class="news-list">${data.items.map(item => `
-          <a class="news-item" href="${item.link}" target="_blank" rel="noopener">
-            <div class="news-headline">${item.title}</div>
-            <div class="news-meta">${timeAgo(new Date(item.pubDate))}</div>
-          </a>`).join("")}</div>`;
-    } catch {
-      document.getElementById("news-body").innerHTML =
-        `<div style="padding:16px;color:var(--muted);font-size:.83rem;">Could not load headlines. Check your connection.</div>`;
-    }
+        `<div class="news-list">${items.map(item => {
+          const title = item.querySelector("title")?.textContent || "";
+          const link = item.querySelector("link")?.textContent || "#";
+          const pub = item.querySelector("pubDate")?.textContent;
+          return `<a class="news-item" href="${link}" target="_blank" rel="noopener">
+            <div class="news-headline">${title}</div>
+            <div class="news-meta">${pub ? timeAgo(new Date(pub)) : ""}</div>
+          </a>`;
+        }).join("")}</div>`;
+      return;
+    } catch(e) { continue; }
   }
+  document.getElementById("news-body").innerHTML =
+    `<div style="padding:16px;color:var(--muted);font-size:.83rem;">Could not load headlines.</div>`;
 }
 
 function timeAgo(date) {
